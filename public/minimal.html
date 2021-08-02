@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Passwordless Node</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Passwordless API with Node.js</h2>
+  <p>To run this example you don't have to do anythin.</p>
+  <p><a href="https://docs.passwordless.dev/guide/getting-started.html#introduction">Documentation</a> - <a
+      href="https://beta.passwordless.dev/create-account">Get your API keys</a></p>
+
+  <input type="text" id="alias" placeholder="Alias (Username, email)" />
+  <button id="passwordless-register">Register</button>
+  <button id="passwordless-signin">Login</button>
+  <pre id="status"></pre>
+
+  <script
+      src="https://cdn.passwordless.dev/dist/0.2.0/passwordless.iife.js"
+      crossorigin="anonymous"
+    ></script>
+
+  <script>
+    // Passwordless integration
+    const apiKey = "demobackend:public:c203e65b581443778ea4823b3ef0d6af";
+    const backendUrl = "https://demo-backend.passwordless.dev";
+
+    async function Register(alias) {
+      const p = new Passwordless.Client({ apiKey });
+      const myToken = await fetch(backendUrl + "/create-token?alias=" + alias).then((r) => r.text());
+      await p.register(myToken);
+      console.log("Register succeded");
+    }
+    async function Signin(alias) {
+      const p = new Passwordless.Client({ apiKey });
+      const token = await p.signinWithAlias(alias);
+      const user = await fetch(backendUrl + "/verify-signin?token=" + token).then((r) => r.json());
+      console.log("User details", user);
+      return user;
+    }
+  </script>
+
+  <script>
+    // DEMO UI
+   
+
+    // Bind methods to UI buttons/events:
+    async function RegisterPasswordless(e) {
+      e.preventDefault();
+      const alias = document.getElementById("alias").value;
+      await Register(alias);
+      Status("Succeded with register");
+    }
+    document
+      .getElementById("passwordless-register")
+      .addEventListener("click", RegisterPasswordless);
+
+    async function handleSignInSubmit(e) {
+      e.preventDefault();
+      const alias = document.getElementById("alias").value;
+      const user = await Signin(alias)
+      Status("User details: " + JSON.stringify(user, null, 2));
+    }
+    document
+      .getElementById("passwordless-signin")
+      .addEventListener("click", handleSignInSubmit);
+
+    // Print Status messages to UI.
+    const status = document.getElementById("status");
+    function Status(text) {
+      const currentText = status.innerText;
+      var newLine =
+        "[" + new Date().toLocaleTimeString() + "]: " + text + "\n";
+      status.innerText = newLine + currentText;
+    }
+    Status("Welcome! Please register or sign in");
+  </script>
+</body>
+
+</html>

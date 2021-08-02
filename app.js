@@ -1,43 +1,70 @@
 const express = require("express");
-const request = require("request");
+const fetch = require("node-fetch");
 const app = express();
-const port = 3000;
+require('dotenv').config();
+const port = process.env.PORT || 3000;
 
-var API_SECRET = "YOUR_API_SECRET"; // Replace with your API secret
+const apiurl = process.env.API_URL || "https://apiv2.passwordless.dev";
+const API_SECRET = process.env.API_SECRET || "YOUR_API_SECRET"; // Replace with your API secret
+const API_KEY = process.env.API_KEY || "YOUR_API_KEY"; // this will be injected to index.html
+
+app.use(function(req, res, next) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  next();
+});
 
 /** 
  * Register - Get token from the passwordless API
  * 
- * The passwordless client side code needs a Token to register a key to a username.
+ * The passwordless client side code needs a Token to register a key to a UserID.
  * The token is used by the Passwordless API to verify that this action is allowed for this user.
  * Your server can create this token by calling the Passwordless API with the ApiSecret.
  * This allows you to control the process, perhaps you only want to allow new users to register or only allow already signed in users to add a Key to their own account.
  * 
  * Request body looks like:
- * { username: 'anders', displayName:'Anders Åberg'}
+ * { UserID: '12345', displayName:'Anders Åberg'}
  * Response body looks like:
  * "abcdefghiojklmnopq..."
  */
-app.get("/create-token", (req, res) => {
-  
-  // grab the username from querystring (or session, cookie)
+app.get("/create-token", async (req, res) => {
+
+  const userId = getRandomInt(999999999);
+  const alias = req.query.alias;
+  const displayname = "Mr Guest";
+  // grab the userid from session, cookie etc
   const payload = {
-    username: req.query.username,
+    userId,
+    username: alias,
+    displayname,
   };
 
+  console.log("creating-token");
   // Send the username to the passwordless api to get a token
-  request.post(
-    {
-      url: "https://api.passwordless.dev/register/token",
-      json: payload,
-      headers: { ApiSecret: API_SECRET },
-    },
-    (_err, _httpResponse, body) => {        
-      const token = body;
-      // return the token to our clientside
-      res.send(token);
+  var response = await fetch(apiurl + "/register/token", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: { ApiSecret: API_SECRET, 'Content-Type': 'application/json'}
+  });
+  console.log("api response", response);
+  var token = await response.text();
+  console.log("received token", token);
+
+  res.send(token);
+
+
+  // We can also set aliases for the userid
+  const response2 = await fetch(apiurl + "/alias", {
+    method: "POST",
+    body: JSON.stringify({
+      userId: userId,
+      aliases: [alias]
+    }),
+    headers: {
+      ApiSecret: API_SECRET, 
+      'Content-Type': 'application/json'
     }
-  );
+  });
+  console.log(response2, await response2.text());
 });
 
 /**
@@ -58,22 +85,46 @@ app.get("/create-token", (req, res) => {
    "origin":"https://example.com"}
  * 
  */
-app.get("/verify-signin", (req, res) => {
-    const token = {token: req.query.token};
+app.get("/verify-signin", async (req, res) => {
+  const token = { token: req.query.token };
 
-    request.post({url: "https://api.passwordless.dev/signin/verify", json: token, headers: { ApiSecret: API_SECRET} }, (err, httpres, body) => {
-   
-        if(body.success === true) {
-            console.log("Succesfully verfied signin for user", body.username);
-        }
+  console.log("Validating token", token);
 
-        res.send(body);
-    })
+  const response = await fetch(apiurl + "/signin/verify", {
+    method: "POST",
+    body: JSON.stringify(token),
+    headers: { ApiSecret: API_SECRET, 'Content-Type': 'application/json' }
+  });
+
+  var body = await response.json();
+  if (body.success) {
+    console.log("Succesfully verfied signin for user", body);
+  } else {
+    console.warn("Sign in failed", body);
+  }
+  res.send(body);
 });
 
-// serve html files
+// Response with index.html but replace API_KEY value.
+const fs = require('fs');
+app.get("", (req, res) => {
+  const index ="public/index.html";
+  fs.readFile(index, 'utf8', function (err,data) {
+    if (err) {
+      return console.log(err);
+    }
+    var result = data.replace(/<YOUR_API_KEY>/g, API_KEY);
+    res.send(result);
+  });
+});
+
+// serve static/html files
 app.use(express.static("public"));
 
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 });
+
+function getRandomInt(max) {
+  return Math.floor(Math.random() * max);
+}
